@@ -2,14 +2,17 @@ import time
 import tensorflow as tf
 import numpy as np
 import pandas as pd
-from scipy.misc import imread
+
+#from scipy.misc import imread
+from imageio import imread
+
 from alexnet import AlexNet
 
 sign_names = pd.read_csv('signnames.csv')
 nb_classes = 43
 
 x = tf.placeholder(tf.float32, (None, 32, 32, 3))
-resized = tf.image.resize_images(x, (227, 227))
+resized = tf.image.resize_images(x,[227,227])
 
 # NOTE: By setting `feature_extract` to `True` we return
 # the second to last layer.
@@ -19,7 +22,16 @@ fc7 = AlexNet(resized, feature_extract=True)
 # HINT: Look at the final layer definition in alexnet.py to get an idea of what this
 # should look like.
 shape = (fc7.get_shape().as_list()[-1], nb_classes)  # use this shape for the weight matrix
-probs = ...
+
+#为网络新增加一个全连层
+with tf.name_scope('New_add1'):
+    mu = 0
+    sigma = 0.1
+    weight8 = tf.Variable(tf.truncated_normal([4096,43],mean = mu, stddev = sigma),name = 'weight8')
+    bias8 = tf.Variable(tf.zeros(43),name = 'bias8')
+    Mux8 = tf.matmul(fc7,weight8)
+    logits8 = tf.add(Mux8,bias8)
+    probs = tf.nn.softmax(logits8)
 
 init = tf.global_variables_initializer()
 sess = tf.Session()
@@ -41,7 +53,7 @@ for input_im_ind in range(output.shape[0]):
     inds = np.argsort(output)[input_im_ind, :]
     print("Image", input_im_ind)
     for i in range(5):
-        print("%s: %.3f" % (sign_names.ix[inds[-1 - i]][1], output[input_im_ind, inds[-1 - i]]))
+        print("%s: %.3f" % (sign_names.loc[inds[-1 - i]][1], output[input_im_ind, inds[-1 - i]]))
     print()
 
 print("Time: %.3f seconds" % (time.time() - t))

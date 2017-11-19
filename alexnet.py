@@ -7,6 +7,9 @@ net_data = np.load("bvlc-alexnet.npy", encoding="latin1").item()
 def conv(input, kernel, biases, k_h, k_w, c_o, s_h, s_w,  padding="VALID", group=1):
     '''
     From https://github.com/ethereon/caffe-tensorflow
+    k_h, k_w:核的大小
+    s_h, s_w：核的运动步长
+    c_o：滤波器的大小（卷积层的输出个数）
     '''
     c_i = input.get_shape()[-1]
     assert c_i % group == 0
@@ -25,6 +28,9 @@ def conv(input, kernel, biases, k_h, k_w, c_o, s_h, s_w,  padding="VALID", group
         if group == 1:
             conv = convolve(input, kernel)
         else:
+            #需要分裂的时候，将上一层的扫描结果按照层分开，
+            #然后分别做扫描，然后再将得到的结果叠合在一起。
+            #这样叠合以后的结果就是对不同层做的扫描
             input_groups = tf.split(input, group, 3)
             kernel_groups = tf.split(kernel, group, 3)
             output_groups = [convolve(i, k) for i, k in zip(input_groups, kernel_groups)]
@@ -35,6 +41,7 @@ def conv(input, kernel, biases, k_h, k_w, c_o, s_h, s_w,  padding="VALID", group
 def AlexNet(features, feature_extract=False):
     """
     Builds an AlexNet model, loads pretrained weights
+    feature_extract = True 会导致去掉最后一层直接输出
     """
     # conv1
     # conv(11, 11, 96, 4, 4, padding='VALID', name='conv1')
@@ -47,9 +54,11 @@ def AlexNet(features, feature_extract=False):
     conv1b = tf.Variable(net_data["conv1"][1])
     conv1_in = conv(features, conv1W, conv1b, k_h, k_w, c_o, s_h, s_w, padding="SAME", group=1)
     conv1 = tf.nn.relu(conv1_in)
-
     # lrn1
     # lrn(2, 2e-05, 0.75, name='norm1')
+    #模仿神经元的侧抑制现象：一个神经元兴奋会抑制其他神经元。
+    #对应的featureMap的某个像素值很大，则会导致其他featureMap的值变小
+    #又叫做LRN层
     radius = 2
     alpha = 2e-05
     beta = 0.75
